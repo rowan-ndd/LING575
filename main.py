@@ -35,7 +35,7 @@ BASE_DIR = './data'
 GLOVE_DIR = BASE_DIR + '/glove/'
 TEXT_DATA_DIR = BASE_DIR + '/rcv1/all/'
 MAX_SEQUENCE_LENGTH = 1000
-MAX_CHAR_PER_TOKEN = 8
+MAX_CHAR_PER_TOKEN = 5
 MAX_NB_WORDS = 20000
 EMBEDDING_DIM = 100
 VALIDATION_SPLIT = 0.2
@@ -94,7 +94,9 @@ def load_data(labels):
     return x_train, y_train, x_val, y_val, word_index
 
 
+
 def load_char_data(texts, labels, alphabet):
+
     #convert texts into character sequence
     check = set(alphabet)
     char_seqences = []
@@ -209,7 +211,7 @@ if __name__ == "__main__":
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
 
-        x_train, y_train, x_val, y_val = load_char_data(texts, labels, alphabet)
+        x_train, y_train, x_val, y_val, word_index = load_char_data(texts, labels, alphabet)
 
         sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input', dtype='int32')
         embedding_layer = Embedding(vocab_size,
