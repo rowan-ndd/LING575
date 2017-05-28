@@ -43,6 +43,22 @@ def build_model(type, embedded_sequences, labels_index, sequence_input):
                        optimizer='adam',
                       metrics=['acc'])
 
+    if type == 'cnn_simple_2':
+        x = Dropout(0.2)(embedded_sequences)
+        x = Conv1D(filters, kernel_size, padding='valid', activation='relu', strides=1)(x)
+        x = MaxPooling1D(5)(x)
+        x = Dropout(0.2)(x)
+        x = Conv1D(filters/2, kernel_size/2, padding='valid', activation='relu', strides=1)(x)
+        x = GlobalMaxPooling1D()(x)
+        x = Dropout(0.2)(x)
+        x = Dense(128, activation='relu')(x)
+        x = Dropout(0.2)(x)
+        preds = Dense(len(labels_index), activation='softmax')(x)
+        model = Model(sequence_input, preds)
+        model.compile(loss='categorical_crossentropy',
+                       optimizer='adam',
+                      metrics=['acc'])
+
     if type == 'lstm':
         x = Dropout(0.2)(embedded_sequences)
         x = Bidirectional(LSTM(64, dropout=0.2, recurrent_dropout=0.2))(x)

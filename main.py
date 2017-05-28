@@ -106,7 +106,7 @@ def load_char_data(texts, labels, alphabet):
                 new_chars.append(c)
         char_seqences.append(new_chars)
 
-    tokenizer = Tokenizer(num_words=MAX_NB_WORDS)
+    tokenizer = Tokenizer(num_words=MAX_NB_WORDS,nb_words=64, lower=True,char_level=True)
     tokenizer.fit_on_texts(char_seqences)
     sequences = tokenizer.texts_to_sequences(char_seqences)
     word_index = tokenizer.word_index
@@ -165,12 +165,12 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser("NN for NLP")
-    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm")
+    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm, cnn_simple, char_cnn, cnn_simple_2")
     parser.add_argument("-corpus", help="training corpus: rcv1, enron")
 
     args = parser.parse_args()
 
-    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn']
+    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn', 'cnn_simple_2']
     possible_corpus  = ['rcv1', 'enron']
     if args.network not in possible_network:
         raise ValueError('not supported network type')
@@ -189,7 +189,7 @@ if __name__ == "__main__":
 
 
 
-    if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple':
+    if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple' or NETWORK_TYPE == 'cnn_simple_2':
         #load texts
         texts,labels = load_text()
         x_train, y_train, x_val, y_val, word_index = load_data(labels)
@@ -197,7 +197,7 @@ if __name__ == "__main__":
         # first, build index mapping words in the embeddings set to their embedding vector
         embedding_layer = prepEmbeddingMatrix()
 
-        sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH), dtype='int32')
+        sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
         embedded_sequences = embedding_layer(sequence_input)
         model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
 
         x_train, y_train, x_val, y_val = load_char_data(texts, labels, alphabet)
 
-        sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN), name='input', dtype='int32')
+        sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input', dtype='int32')
         embedding_layer = Embedding(vocab_size,
                                     EMBEDDING_DIM,
                                     input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
