@@ -29,6 +29,21 @@ import pickle
 import theano
 theano.config.openmp = True
 
+import string
+
+BASE_DIR = './data'
+GLOVE_DIR = BASE_DIR + '/glove/'
+TEXT_DATA_DIR = BASE_DIR + '/rcv1/all/'
+MAX_SEQUENCE_LENGTH = 1000
+MAX_CHAR_PER_TOKEN = 8
+MAX_NB_WORDS = 20000
+EMBEDDING_DIM = 100
+VALIDATION_SPLIT = 0.2
+
+texts = []  # list of text samples
+labels_index = {}  # dictionary mapping label name to numeric id
+labels = []  # list of label ids
+
 
 def load_text():
     for file_name in sorted(os.listdir(TEXT_DATA_DIR)):
@@ -54,6 +69,7 @@ def load_text():
     print('Found %s texts.' % len(texts))
     return texts,labels
 
+
 def load_data(labels):
     # finally, vectorize the text samples into a 2D integer tensor
     tokenizer = Tokenizer(num_words=MAX_NB_WORDS)
@@ -65,6 +81,42 @@ def load_data(labels):
     labels = to_categorical(np.asarray(labels))
     print('Shape of data tensor:', data.shape)
     print('Shape of label tensor:', labels.shape)
+    # split the data into a training set and a validation set
+    indices = np.arange(data.shape[0])
+    np.random.shuffle(indices)
+    data = data[indices]
+    labels = labels[indices]
+    num_validation_samples = int(VALIDATION_SPLIT * data.shape[0])
+    x_train = data[:-num_validation_samples]
+    y_train = labels[:-num_validation_samples]
+    x_val = data[-num_validation_samples:]
+    y_val = labels[-num_validation_samples:]
+    return x_train, y_train, x_val, y_val, word_index
+
+
+def load_char_data(texts, labels, alphabet):
+    #convert texts into character sequence
+    check = set(alphabet)
+    char_seqences = []
+    for text in texts:
+        chars = list(text.replace(' ', ''))
+        new_chars = []
+        for c in chars:
+            if c in check:
+                new_chars.append(c)
+        char_seqences.append(new_chars)
+
+    tokenizer = Tokenizer(num_words=MAX_NB_WORDS)
+    tokenizer.fit_on_texts(char_seqences)
+    sequences = tokenizer.texts_to_sequences(char_seqences)
+    word_index = tokenizer.word_index
+
+    print('Found %s unique tokens.' % len(word_index))
+    data = pad_sequences(sequences, maxlen=MAX_SEQUENCE_LENGTH*MAX_CHAR_PER_TOKEN)
+    labels = to_categorical(np.asarray(labels))
+    print('Shape of data tensor:', data.shape)
+    print('Shape of label tensor:', labels.shape)
+
     # split the data into a training set and a validation set
     indices = np.arange(data.shape[0])
     np.random.shuffle(indices)
@@ -109,69 +161,83 @@ def prepEmbeddingMatrix():
     return embedding_layer
 
 
+if __name__ == "__main__":
 
-import argparse
-parser = argparse.ArgumentParser("NN for NLP")
-parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm")
-parser.add_argument("-corpus", help="training corpus: rcv1, enron")
+    import argparse
+    parser = argparse.ArgumentParser("NN for NLP")
+    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm")
+    parser.add_argument("-corpus", help="training corpus: rcv1, enron")
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple']
-possible_corpus  = ['rcv1', 'enron']
-if args.network not in possible_network:
-    raise ValueError('not supported network type')
-if args.corpus not in possible_corpus:
-    raise ValueError('not supported corpus type')
+    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn']
+    possible_corpus  = ['rcv1', 'enron']
+    if args.network not in possible_network:
+        raise ValueError('not supported network type')
+    if args.corpus not in possible_corpus:
+        raise ValueError('not supported corpus type')
 
-NETWORK_TYPE = args.network
-CORPUS_TYPE = args.corpus
+    NETWORK_TYPE = args.network
+    CORPUS_TYPE = args.corpus
 
 
-BASE_DIR = './data'
-GLOVE_DIR = BASE_DIR + '/glove/'
-TEXT_DATA_DIR = BASE_DIR + '/rcv1/all/'
-MAX_SEQUENCE_LENGTH = 1000
-MAX_NB_WORDS = 20000
-EMBEDDING_DIM = 100
-VALIDATION_SPLIT = 0.2
 
-# second, prepare text samples and their labels
-print('Processing text dataset')
 
-texts = []  # list of text samples
-labels_index = {}  # dictionary mapping label name to numeric id
-labels = [] # list of label ids
+    # second, prepare text samples and their labels
+    print('Processing text dataset')
 
-#load texts
-texts,labels = load_text()
-x_train, y_train, x_val, y_val, word_index = load_data(labels)
 
-# first, build index mapping words in the embeddings set to their embedding vector
-embedding_layer = prepEmbeddingMatrix()
 
-sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
-embedded_sequences = embedding_layer(sequence_input)
-model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
 
-print('Training model.')
+    if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple':
+        #load texts
+        texts,labels = load_text()
+        x_train, y_train, x_val, y_val, word_index = load_data(labels)
 
-_callbacks = [
-    EarlyStopping(monitor='val_loss', patience=2, verbose=0),
-    #ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0),
-]
+        # first, build index mapping words in the embeddings set to their embedding vector
+        embedding_layer = prepEmbeddingMatrix()
 
-model.fit(x_train, y_train,
-          batch_size=128,
-          epochs=1000,
-          validation_data=(x_val, y_val), callbacks = _callbacks)
+        sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH), dtype='int32')
+        embedded_sequences = embedding_layer(sequence_input)
+        model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
 
-# serialize model to JSON
-model_json = model.to_json()
-with open(CORPUS_TYPE + NETWORK_TYPE + ".model.json", "w") as json_file:
-    json_file.write(model_json)
-# serialize weights
-pickle.dump(model.get_weights(), open(CORPUS_TYPE + NETWORK_TYPE + ".weight.pickle", "wb"))
 
-print("Saved model to disk")
+    elif NETWORK_TYPE == 'char_cnn':
+        #load texts
+        texts,labels = load_text()
+        alphabet = (list(string.ascii_letters) + list(string.digits) +
+                    list(string.punctuation) + ['\n'] + [' '])
+        vocab_size = len(alphabet)
+
+        x_train, y_train, x_val, y_val = load_char_data(texts, labels, alphabet)
+
+        sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN), name='input', dtype='int32')
+        embedding_layer = Embedding(vocab_size,
+                                    EMBEDDING_DIM,
+                                    input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
+                                    trainable=True)
+
+        embedded_sequences = embedding_layer(sequence_input)
+        model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
+
+    print('Training model.')
+
+    _callbacks = [
+        EarlyStopping(monitor='val_loss', patience=2, verbose=0),
+        #ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0),
+    ]
+
+    model.fit(x_train, y_train,
+              batch_size=128,
+              epochs=1000,
+              validation_data=(x_val, y_val), callbacks = _callbacks)
+
+    # serialize model to JSON
+    model_json = model.to_json()
+    with open(CORPUS_TYPE + NETWORK_TYPE + ".model.json", "w") as json_file:
+        json_file.write(model_json)
+    # serialize weights
+    pickle.dump(model.get_weights(), open(CORPUS_TYPE + NETWORK_TYPE + ".weight.pickle", "wb"))
+
+    print("Saved model to disk")
 
