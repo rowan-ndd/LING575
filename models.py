@@ -48,7 +48,7 @@ def build_model(type, embedded_sequences, labels_index, sequence_input):
         x = Conv1D(filters, kernel_size, padding='valid', activation='relu', strides=1)(x)
         x = MaxPooling1D(5)(x)
         x = Dropout(0.2)(x)
-        x = Conv1D(filters/2, kernel_size/2, padding='valid', activation='relu', strides=1)(x)
+        x = Conv1D(int(filters/2), int(kernel_size/2), padding='valid', activation='relu', strides=1)(x)
         x = GlobalMaxPooling1D()(x)
         x = Dropout(0.2)(x)
         x = Dense(128, activation='relu')(x)
