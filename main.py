@@ -37,7 +37,8 @@ TEXT_DATA_DIR = BASE_DIR + '/rcv1/all/'
 MAX_SEQUENCE_LENGTH = 1000
 MAX_CHAR_PER_TOKEN = 5
 MAX_NB_WORDS = 20000
-EMBEDDING_DIM = 100
+CHAR_EMBEDDING_DIM = 300
+WORD_EMBEDDING_DIM = 100
 VALIDATION_SPLIT = 0.2
 
 texts = []  # list of text samples
@@ -131,7 +132,39 @@ def load_char_data(texts, labels, alphabet):
     y_val = labels[-num_validation_samples:]
     return x_train, y_train, x_val, y_val, word_index
 
-def prepEmbeddingMatrix():
+def loadCharEmbeddingMatrix():
+    print('Indexing char vectors.')
+    embeddings_index = {}
+    f = open(os.path.join(GLOVE_DIR, 'glove.840B.300d-char.txt'))
+    for line in f:
+        values = line.split()
+        char = values[0]
+        coefs = np.asarray(values[1:], dtype='float32')
+        embeddings_index[char] = coefs
+    f.close()
+    print('Found %s word vectors.' % len(embeddings_index))
+    # prepare embedding matrix
+    num_words = min(MAX_NB_WORDS, len(word_index))
+    embedding_matrix = np.zeros((num_words, WORD_EMBEDDING_DIM))
+    for char, i in word_index.items():
+        if i >= MAX_NB_WORDS:
+            continue
+        embedding_vector = embeddings_index.get(char)
+        if embedding_vector is not None:
+            # words not found in embedding index will be all-zeros.
+            embedding_matrix[i] = embedding_vector
+
+    # load pre-trained word embeddings into an Embedding layer
+    # note that we set trainable = False so as to keep the embeddings fixed
+    embedding_layer = Embedding(num_words,
+                                CHAR_EMBEDDING_DIM,
+                                weights=[embedding_matrix],
+                                input_length=MAX_SEQUENCE_LENGTH*MAX_CHAR_PER_TOKEN,
+                                trainable=False, name='word_embed')
+    return embedding_layer
+
+
+def loadWordEmbeddingMatrix():
     print('Indexing word vectors.')
     embeddings_index = {}
     f = open(os.path.join(GLOVE_DIR, 'glove.6B.100d.txt'))
@@ -144,7 +177,7 @@ def prepEmbeddingMatrix():
     print('Found %s word vectors.' % len(embeddings_index))
     # prepare embedding matrix
     num_words = min(MAX_NB_WORDS, len(word_index))
-    embedding_matrix = np.zeros((num_words, EMBEDDING_DIM))
+    embedding_matrix = np.zeros((num_words, WORD_EMBEDDING_DIM))
     for word, i in word_index.items():
         if i >= MAX_NB_WORDS:
             continue
@@ -156,10 +189,10 @@ def prepEmbeddingMatrix():
     # load pre-trained word embeddings into an Embedding layer
     # note that we set trainable = False so as to keep the embeddings fixed
     embedding_layer = Embedding(num_words,
-                                EMBEDDING_DIM,
+                                WORD_EMBEDDING_DIM,
                                 weights=[embedding_matrix],
                                 input_length=MAX_SEQUENCE_LENGTH,
-                                trainable=False,name='word_embed')
+                                trainable=False, name='word_embed')
     return embedding_layer
 
 
@@ -167,12 +200,12 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser("NN for NLP")
-    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm, cnn_simple, char_cnn, cnn_simple_2, cnn_simple_3 ,char_cnn_2")
+    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm, cnn_simple, char_cnn, cnn_simple_2, cnn_simple_3 ,char_cnn_2,char_cnn_3")
     parser.add_argument("-corpus", help="training corpus: rcv1, enron")
 
     args = parser.parse_args()
 
-    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn', 'cnn_simple_2', 'cnn_simple_3', 'char_cnn_2']
+    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn', 'cnn_simple_2', 'cnn_simple_3', 'char_cnn_2', 'char_cnn_3']
     possible_corpus  = ['rcv1', 'enron']
     if args.network not in possible_network:
         raise ValueError('not supported network type')
@@ -191,14 +224,14 @@ if __name__ == "__main__":
         x_train, y_train, x_val, y_val, word_index = load_data(labels)
 
         # first, build index mapping words in the embeddings set to their embedding vector
-        embedding_layer = prepEmbeddingMatrix()
+        embedding_layer = loadWordEmbeddingMatrix()
 
         sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
         embedded_sequences = embedding_layer(sequence_input)
         model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
 
 
-    elif NETWORK_TYPE == 'char_cnn' or NETWORK_TYPE == 'char_cnn_2' :
+    elif NETWORK_TYPE == 'char_cnn_2' :
         #load texts
         texts,labels = load_text()
         alphabet = (list(string.ascii_letters) + list(string.digits) +
@@ -210,24 +243,21 @@ if __name__ == "__main__":
 
         #char embedding
         char_embedding_layer = Embedding(vocab_size,
-                                    EMBEDDING_DIM,
-                                    input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
-                                    trainable=True, name='char_embed')
+                                         WORD_EMBEDDING_DIM,
+                                         input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
+                                         trainable=True, name='char_embed')
         char_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input', dtype='int32')
 
 
 
         #word embedding
-        word_embedding_layer = prepEmbeddingMatrix()
+        word_embedding_layer = loadWordEmbeddingMatrix()
         word_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
 
         model = models.build_model(NETWORK_TYPE, word_embedding_layer(word_sequence_input), labels_index, word_sequence_input,
                                     embedded_char_sequences = char_embedding_layer(char_sequence_input), char_sequence_input = char_sequence_input)
 
-        x_train_c
-
         print(model.summary())
-
     print('Training model.')
 
     _callbacks = [
@@ -235,11 +265,16 @@ if __name__ == "__main__":
         #ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0),
     ]
 
-
-    model.fit([x_train_w, x_train_c], y_train_c,
-              batch_size=128,
-              epochs=1000,
-              validation_data=([x_val_w,x_val_c], y_val_c), callbacks = _callbacks)
+    if NETWORK_TYPE == 'char_cnn_2' :
+        model.fit([x_train_w, x_train_c], y_train_c,
+                  batch_size=128,
+                  epochs=1000,
+                  validation_data=([x_val_w,x_val_c], y_val_c), callbacks = _callbacks)
+    else:
+        model.fit(x_train, y_train,
+                  batch_size=128,
+                  epochs=1000,
+                  validation_data=(x_val, y_val), callbacks = _callbacks)
 
     # serialize model to JSON
     model_json = model.to_json()
