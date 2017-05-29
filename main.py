@@ -159,7 +159,7 @@ def prepEmbeddingMatrix():
                                 EMBEDDING_DIM,
                                 weights=[embedding_matrix],
                                 input_length=MAX_SEQUENCE_LENGTH,
-                                trainable=False)
+                                trainable=False,name='word_embed')
     return embedding_layer
 
 
@@ -167,12 +167,12 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser("NN for NLP")
-    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm, cnn_simple, char_cnn, cnn_simple_2")
+    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm, cnn_simple, char_cnn, cnn_simple_2, cnn_simple_3 ,char_cnn_2")
     parser.add_argument("-corpus", help="training corpus: rcv1, enron")
 
     args = parser.parse_args()
 
-    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn', 'cnn_simple_2']
+    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn', 'cnn_simple_2', 'cnn_simple_3', 'char_cnn_2']
     possible_corpus  = ['rcv1', 'enron']
     if args.network not in possible_network:
         raise ValueError('not supported network type')
@@ -182,16 +182,10 @@ if __name__ == "__main__":
     NETWORK_TYPE = args.network
     CORPUS_TYPE = args.corpus
 
-
-
-
     # second, prepare text samples and their labels
     print('Processing text dataset')
 
-
-
-
-    if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple' or NETWORK_TYPE == 'cnn_simple_2':
+    if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple' or NETWORK_TYPE == 'cnn_simple_2' or NETWORK_TYPE == 'cnn_simple_3' :
         #load texts
         texts,labels = load_text()
         x_train, y_train, x_val, y_val, word_index = load_data(labels)
@@ -204,23 +198,33 @@ if __name__ == "__main__":
         model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
 
 
-    elif NETWORK_TYPE == 'char_cnn':
+    elif NETWORK_TYPE == 'char_cnn' or NETWORK_TYPE == 'char_cnn_2' :
         #load texts
         texts,labels = load_text()
         alphabet = (list(string.ascii_letters) + list(string.digits) +
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
 
-        x_train, y_train, x_val, y_val, word_index = load_char_data(texts, labels, alphabet)
+        x_train_word, y_train_word, x_val, y_val, word_index = load_char_data(texts, labels, alphabet)
+        x_train_char, y_train_char, x_val, y_val, word_index = load_data(labels)
 
-        sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input', dtype='int32')
-        embedding_layer = Embedding(vocab_size,
+        #char embedding
+        char_embedding_layer = Embedding(vocab_size,
                                     EMBEDDING_DIM,
                                     input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
-                                    trainable=True)
+                                    trainable=True, name='char_embed')
+        char_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input', dtype='int32')
 
-        embedded_sequences = embedding_layer(sequence_input)
-        model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
+
+
+        #word embedding
+        word_embedding_layer = prepEmbeddingMatrix()
+        word_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
+
+        model = models.build_model(NETWORK_TYPE, word_embedding_layer(word_sequence_input), labels_index, word_sequence_input,
+                                    embedded_char_sequences = char_embedding_layer(char_sequence_input), char_sequence_input = char_sequence_input)
+
+        print(model.summary())
 
     print('Training model.')
 
