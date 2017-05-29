@@ -94,7 +94,7 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
         z = MaxPooling1D(5)(z)
         z = Dropout(0.2)(z)
 
-        merged = merge([y, z], mode='concat', concat_axis=1)
+        merged = merge([z, y], mode='concat', concat_axis=1)
         x = GlobalMaxPooling1D()(merged)
         x = Dense(128, activation='relu')(x)
         x = Dropout(0.2)(x)
@@ -102,8 +102,8 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
 
         model = Model([word_sequence_input, char_sequence_input], preds)
         model.compile(loss='categorical_crossentropy',
-                       optimizer='adam',
-                      metrics=['acc'])
+                        optimizer='adam',
+                            metrics=['acc'])
 
 
 

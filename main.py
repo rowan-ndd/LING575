@@ -205,8 +205,8 @@ if __name__ == "__main__":
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
 
-        x_train_word, y_train_word, x_val, y_val, word_index = load_char_data(texts, labels, alphabet)
-        x_train_char, y_train_char, x_val, y_val, word_index = load_data(labels)
+        x_train_c, y_train_c, x_val_c, y_val_c, word_index = load_char_data(texts, labels, alphabet)
+        x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(labels)
 
         #char embedding
         char_embedding_layer = Embedding(vocab_size,
@@ -224,6 +224,8 @@ if __name__ == "__main__":
         model = models.build_model(NETWORK_TYPE, word_embedding_layer(word_sequence_input), labels_index, word_sequence_input,
                                     embedded_char_sequences = char_embedding_layer(char_sequence_input), char_sequence_input = char_sequence_input)
 
+        x_train_c
+
         print(model.summary())
 
     print('Training model.')
@@ -233,10 +235,11 @@ if __name__ == "__main__":
         #ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0),
     ]
 
-    model.fit(x_train, y_train,
+
+    model.fit([x_train_w, x_train_c], y_train_c,
               batch_size=128,
               epochs=1000,
-              validation_data=(x_val, y_val), callbacks = _callbacks)
+              validation_data=([x_val_w,x_val_c], y_val_c), callbacks = _callbacks)
 
     # serialize model to JSON
     model_json = model.to_json()
