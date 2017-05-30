@@ -257,13 +257,11 @@ if __name__ == "__main__":
         model = models.build_model(NETWORK_TYPE, word_embedding_layer(word_sequence_input), labels_index, word_sequence_input,
                                     embedded_char_sequences = char_embedding_layer(char_sequence_input), char_sequence_input = char_sequence_input)
 
-        print(model.summary())
-    print('Training model.')
-
     _callbacks = [
         EarlyStopping(monitor='val_loss', patience=2, verbose=0),
         #ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0),
     ]
+    print(model.summary())
 
     if NETWORK_TYPE == 'char_cnn_2' :
         model.fit([x_train_w, x_train_c], y_train_c,
@@ -275,6 +273,10 @@ if __name__ == "__main__":
                   batch_size=128,
                   epochs=1000,
                   validation_data=(x_val, y_val), callbacks = _callbacks)
+
+
+    print('Training model.')
+
 
     # serialize model to JSON
     model_json = model.to_json()

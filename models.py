@@ -82,21 +82,25 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
 
     if type == 'char_cnn_2':
         embedded_word = Dropout(0.2)(word_embedded_sequences)
-        embedded_char = Dropout(0.2)(TimeDistributed(embedded_char_sequences))
+        embedded_char = Dropout(0.2)(embedded_char_sequences)
 
 
-        y = Conv1D(filters, filter_kernels[0], padding='valid', activation='relu', strides=1)(embedded_word)
+        y = Conv1D(filters, filter_kernels[0], padding='valid', activation='relu', strides=1, name='conv_word_1')(embedded_word)
         y = MaxPooling1D(5)(y)
         y = Dropout(0.2)(y)
 
 
-        z = Conv1D(filters, filter_kernels[0], padding='valid', activation='relu', strides=1)(embedded_char)
+        z = Conv1D(filters, filter_kernels[0], padding='valid', activation='relu', strides=1, name='conv_char_1')(embedded_char)
+        z = MaxPooling1D(5)(z)
+        z = Dropout(0.2)(z)
+
+        z = Conv1D(filters, filter_kernels[1], padding='valid', activation='relu', strides=1, name='conv_char_2')(z)
         z = MaxPooling1D(5)(z)
         z = Dropout(0.2)(z)
 
         merged = merge([z, y], mode='concat', concat_axis=1)
         x = GlobalMaxPooling1D()(merged)
-        x = Dense(128, activation='relu')(x)
+        x = Dense(256, activation='relu')(x)
         x = Dropout(0.2)(x)
         preds = Dense(len(labels_index), activation='softmax')(x)
 
