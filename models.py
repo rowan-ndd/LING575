@@ -1,6 +1,6 @@
 
 from keras.layers import Dense, Flatten, Dropout, Bidirectional, Input, merge
-from keras.layers import Conv1D, MaxPooling1D, LSTM, GlobalMaxPooling1D
+from keras.layers import Conv1D, MaxPooling1D, LSTM, GlobalMaxPooling1D, TimeDistributed
 from keras.models import Model
 
 # Convolution Parameters
@@ -82,7 +82,7 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
 
     if type == 'char_cnn_2':
         embedded_word = Dropout(0.2)(word_embedded_sequences)
-        embedded_char = Dropout(0.2)(embedded_char_sequences)
+        embedded_char = Dropout(0.2)(TimeDistributed(embedded_char_sequences))
 
 
         y = Conv1D(filters, filter_kernels[0], padding='valid', activation='relu', strides=1)(embedded_word)
@@ -122,7 +122,7 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
         x = Dropout(0.2)(word_embedded_sequences)
         x = Conv1D(filters, kernel_size, padding='valid', activation='relu', strides=1)(x)
         x = MaxPooling1D(pool_size=pool_size)(x)
-        x = Bidirectional(LSTM(64, dropout=0.2, recurrent_dropout=0.2))(x)
+        x = Bidirectional(LSTM(128, dropout=0.2, recurrent_dropout=0.2))(x)
         preds = Dense(len(labels_index), activation='softmax')(x)
 
         model = Model(word_sequence_input, preds)
@@ -134,7 +134,7 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
         x = Dropout(0.2)(word_embedded_sequences)
         x = Conv1D(filters, kernel_size, padding='valid', activation='relu', strides=1)(x)
         x = GlobalMaxPooling1D()(x)
-        x = Dense(128, activation='relu')(x)
+        x = Dense(256, activation='relu')(x)
         x = Dropout(0.2)(x)
         preds = Dense(len(labels_index), activation='softmax')(x)
         model = Model(word_sequence_input, preds)
