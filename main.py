@@ -30,6 +30,7 @@ import theano
 theano.config.openmp = True
 
 import string
+import data_helpers
 
 BASE_DIR = './data'
 GLOVE_DIR = BASE_DIR + '/glove/'
@@ -37,7 +38,7 @@ TEXT_DATA_DIR = BASE_DIR + '/rcv1/all/'
 MAX_SEQUENCE_LENGTH = 1000
 MAX_CHAR_PER_TOKEN = 5
 MAX_NB_WORDS = 20000
-CHAR_EMBEDDING_DIM = 300
+CHAR_EMBEDDING_DIM = 50
 WORD_EMBEDDING_DIM = 100
 VALIDATION_SPLIT = 0.2
 
@@ -46,10 +47,13 @@ labels_index = {}  # dictionary mapping label name to numeric id
 labels = []  # list of label ids
 
 
-def load_text():
+def load_text(percent=0.1):
+
     for file_name in sorted(os.listdir(TEXT_DATA_DIR)):
         # file name like: william_wallis=721878newsML.xml.txt
         if False == file_name.endswith(".txt"): continue
+        if random.uniform(0.0, 1.0) > percent: continue
+
         author_name = file_name.split('=')[0]
 
         if author_name not in labels_index:
@@ -71,7 +75,7 @@ def load_text():
     return texts,labels
 
 
-def load_data(labels):
+def load_data(texts, labels):
     # finally, vectorize the text samples into a 2D integer tensor
     tokenizer = Tokenizer(num_words=MAX_NB_WORDS)
     tokenizer.fit_on_texts(texts)
@@ -93,8 +97,6 @@ def load_data(labels):
     x_val = data[-num_validation_samples:]
     y_val = labels[-num_validation_samples:]
     return x_train, y_train, x_val, y_val, word_index
-
-
 
 def load_char_data(texts, labels, alphabet):
 
@@ -164,7 +166,7 @@ def loadCharEmbeddingMatrix():
     return embedding_layer
 
 
-def loadWordEmbeddingMatrix():
+def loadWordEmbeddingMatrix(word_index):
     print('Indexing word vectors.')
     embeddings_index = {}
     f = open(os.path.join(GLOVE_DIR, 'glove.6B.100d.txt'))
@@ -179,8 +181,8 @@ def loadWordEmbeddingMatrix():
     num_words = min(MAX_NB_WORDS, len(word_index))
     embedding_matrix = np.zeros((num_words, WORD_EMBEDDING_DIM))
     for word, i in word_index.items():
-        if i >= MAX_NB_WORDS:
-            continue
+        if i >= num_words:
+            break
         embedding_vector = embeddings_index.get(word)
         if embedding_vector is not None:
             # words not found in embedding index will be all-zeros.
@@ -221,41 +223,66 @@ if __name__ == "__main__":
     if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple' or NETWORK_TYPE == 'cnn_simple_2' or NETWORK_TYPE == 'cnn_simple_3' :
         #load texts
         texts,labels = load_text()
-        x_train, y_train, x_val, y_val, word_index = load_data(labels)
+
+        x_train, y_train, x_val, y_val, word_index = load_data(texts, labels)
 
         # first, build index mapping words in the embeddings set to their embedding vector
-        embedding_layer = loadWordEmbeddingMatrix()
+        embedding_layer = loadWordEmbeddingMatrix(word_index)
 
         sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
         embedded_sequences = embedding_layer(sequence_input)
         model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
 
 
-    elif NETWORK_TYPE == 'char_cnn_2' :
+    elif NETWORK_TYPE == 'char_cnn_2':
         #load texts
         texts,labels = load_text()
+
         alphabet = (list(string.ascii_letters) + list(string.digits) +
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
 
         x_train_c, y_train_c, x_val_c, y_val_c, word_index = load_char_data(texts, labels, alphabet)
-        x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(labels)
+        x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(texts, labels)
 
         #char embedding
         char_embedding_layer = Embedding(vocab_size,
-                                         WORD_EMBEDDING_DIM,
+                                         CHAR_EMBEDDING_DIM,
                                          input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
                                          trainable=True, name='char_embed')
         char_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input', dtype='int32')
 
-
+        #inputs = Input(shape=(maxlen, vocab_size), name='input', dtype='float32')
 
         #word embedding
-        word_embedding_layer = loadWordEmbeddingMatrix()
+        word_embedding_layer = loadWordEmbeddingMatrix(word_index)
         word_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
 
         model = models.build_model(NETWORK_TYPE, word_embedding_layer(word_sequence_input), labels_index, word_sequence_input,
                                     embedded_char_sequences = char_embedding_layer(char_sequence_input), char_sequence_input = char_sequence_input)
+
+    elif NETWORK_TYPE == 'char_cnn':
+        #load texts
+        texts,labels = load_text()
+
+        alphabet = (list(string.ascii_letters) + list(string.digits) +
+                    list(string.punctuation) + ['\n'] + [' '])
+        vocab_size = len(alphabet)
+
+        x_train_c, y_train_c, x_val_c, y_val_c, word_index = load_char_data(texts, labels, alphabet)
+        x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(texts, labels)
+
+        #char embedding
+        char_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input', dtype='int32')
+
+
+        #word embedding
+        word_embedding_layer = loadWordEmbeddingMatrix(word_index)
+        word_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
+        model = models.build_model(NETWORK_TYPE, word_embedding_layer(word_sequence_input), labels_index, word_sequence_input,
+                                    embedded_char_sequences = char_sequence_input, char_sequence_input = char_sequence_input)
+
+
 
     _callbacks = [
         EarlyStopping(monitor='val_loss', patience=2, verbose=0),
@@ -268,6 +295,11 @@ if __name__ == "__main__":
                   batch_size=128,
                   epochs=1000,
                   validation_data=([x_val_w,x_val_c], y_val_c), callbacks = _callbacks)
+    elif NETWORK_TYPE == 'char_cnn' :
+        model.fit(x_train_c, y_train_c,
+                  batch_size=128,
+                  epochs=1000,
+                  validation_data=(x_val_c, y_val_c), callbacks = _callbacks)
     else:
         model.fit(x_train, y_train,
                   batch_size=128,
