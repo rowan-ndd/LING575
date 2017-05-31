@@ -33,7 +33,8 @@ import string
 
 BASE_DIR = './data'
 GLOVE_DIR = BASE_DIR + '/glove/'
-TEXT_DATA_DIR = BASE_DIR + '/rcv1/all/'
+TEXT_DATA_DIR1 = BASE_DIR + '/rcv1/all/'
+TEXT_DATA_DIR2 = BASE_DIR + '/enron_data/'
 MAX_SEQUENCE_LENGTH = 1000
 MAX_CHAR_PER_TOKEN = 5
 MAX_NB_WORDS = 20000
@@ -46,8 +47,11 @@ labels_index = {}  # dictionary mapping label name to numeric id
 labels = []  # list of label ids
 
 
-def load_text():
-    for file_name in sorted(os.listdir(TEXT_DATA_DIR)):
+def load_text(corpus):
+    if corpus == 'rcv1': corpus = TEXT_DATA_DIR1
+    else: corpus = TEXT_DATA_DIR2
+    
+    for file_name in sorted(os.listdir(corpus)):
         # file name like: william_wallis=721878newsML.xml.txt
         if False == file_name.endswith(".txt"): continue
         author_name = file_name.split('=')[0]
@@ -60,7 +64,7 @@ def load_text():
         labels.append(label_id)
 
         # open file, read each line
-        with open(os.path.join(TEXT_DATA_DIR, file_name)) as f:
+        with open(os.path.join(corpus, file_name)) as f:
             lines = f.readlines()
             lines = [x.strip() for x in lines]
         text = ''
@@ -220,7 +224,7 @@ if __name__ == "__main__":
 
     if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple' or NETWORK_TYPE == 'cnn_simple_2' or NETWORK_TYPE == 'cnn_simple_3' :
         #load texts
-        texts,labels = load_text()
+        texts,labels = load_text(CORPUS_TYPE)
         x_train, y_train, x_val, y_val, word_index = load_data(labels)
 
         # first, build index mapping words in the embeddings set to their embedding vector
@@ -233,7 +237,7 @@ if __name__ == "__main__":
 
     elif NETWORK_TYPE == 'char_cnn_2' :
         #load texts
-        texts,labels = load_text()
+        texts,labels = load_text(CORPUS_TYPE)
         alphabet = (list(string.ascii_letters) + list(string.digits) +
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
