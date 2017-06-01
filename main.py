@@ -233,6 +233,7 @@ if __name__ == "__main__":
         sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
         embedded_sequences = embedding_layer(sequence_input)
         model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
+        print(model.summary())
 
 
     elif NETWORK_TYPE == 'char_cnn_2' :
@@ -282,10 +283,10 @@ if __name__ == "__main__":
 
     # serialize model to JSON
     model_json = model.to_json()
-    with open(CORPUS_TYPE + NETWORK_TYPE + ".model.json", "w") as json_file:
+    with open(CORPUS_TYPE +'.'+ NETWORK_TYPE + ".model.json", "w") as json_file:
         json_file.write(model_json)
     # serialize weights
-    pickle.dump(model.get_weights(), open(CORPUS_TYPE + NETWORK_TYPE + ".weight.pickle", "wb"))
+    pickle.dump(model.get_weights(), open(CORPUS_TYPE + '.'+NETWORK_TYPE + ".weight.pickle", "wb"))
 
     print("Saved model to disk")
 
