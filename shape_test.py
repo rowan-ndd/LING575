@@ -71,9 +71,12 @@ y_test = keras.utils.to_categorical(y, num_classes=TOTAL_AUTHOR_NUM)
 print(x_train.shape, ' ' ,x_test.shape)
 print(y_train.shape, ' ' ,y_test.shape)
 
+#shape of input is WORD_EMBED_DIM(averaged by words), MAX_SENTENCES_PER_ARTICLE
 input = Input(shape=(WORD_EMBED_DIM, MAX_SENTENCES_PER_ARTICLE,), name='input')
+#only use LSTM's last output
 x = LSTM(128, return_sequences=False, dropout=0.2, recurrent_dropout=0.2,)(input)
 x = Dropout(0.2)(x)
+#output dim is TOTAL_AUTHOR_NUM
 pred = Dense(TOTAL_AUTHOR_NUM, activation='softmax')(x)
 model = Model(input, pred)
 model.compile(loss='categorical_crossentropy',
@@ -90,7 +93,7 @@ model.fit(x_train, y_train,
           epochs=10,
           validation_data=(x_test, y_test), callbacks=_callbacks)
 
-
+#print model dim summary
 print(model.summary())
 
 predictions = model.predict(x_test)
@@ -98,7 +101,7 @@ prediction_classes = []
 for pred in predictions:
     prediction_classes.append(np.argmax(pred))
 
-#prediction_classes = [np.argmax(pred) for pred in predictions]
+#print confusion matix and other metric
 gold = y
 report = metrics.classification_report(gold, prediction_classes)
 print(report)
