@@ -23,8 +23,8 @@ def fake_data(word_embed_dim, sentence_per_article, num_article):
 #input dim 100
 WORD_EMBED_DIM = 100
 MAX_SENTENCES_PER_ARTICLE = 10
-TRAIN_SAMPLE_SIZE = 32
-TEST_SAMPLE_SIZE = 16
+TRAIN_SAMPLE_SIZE = 128
+TEST_SAMPLE_SIZE = 29
 
 
 #labels: 5 authors: 0,1,2,3,4
