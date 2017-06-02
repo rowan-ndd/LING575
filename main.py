@@ -22,7 +22,7 @@ from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 from keras.utils import to_categorical
 from keras.models import Model,Input
-from keras.layers import Embedding
+from keras.layers import Embedding, Dense, TimeDistributed
 from keras.callbacks import EarlyStopping
 
 import pickle
@@ -38,7 +38,7 @@ TEXT_DATA_DIR2 = BASE_DIR + '/enron_data/'
 MAX_SEQUENCE_LENGTH = 1000
 MAX_CHAR_PER_TOKEN = 5
 MAX_NB_WORDS = 20000
-CHAR_EMBEDDING_DIM = 300
+CHAR_EMBEDDING_DIM = 100
 WORD_EMBEDDING_DIM = 100
 VALIDATION_SPLIT = 0.2
 
@@ -47,13 +47,15 @@ labels_index = {}  # dictionary mapping label name to numeric id
 labels = []  # list of label ids
 
 
-def load_text(corpus):
+def load_text(corpus='rcv1', percent=1.0):
     if corpus == 'rcv1': corpus = TEXT_DATA_DIR1
     else: corpus = TEXT_DATA_DIR2
-    
+
     for file_name in sorted(os.listdir(corpus)):
         # file name like: william_wallis=721878newsML.xml.txt
         if False == file_name.endswith(".txt"): continue
+        if random.uniform(0.0, 1.0) > percent: continue
+
         author_name = file_name.split('=')[0]
 
         if author_name not in labels_index:
@@ -75,7 +77,7 @@ def load_text(corpus):
     return texts,labels
 
 
-def load_data(labels):
+def load_data(texts, labels):
     # finally, vectorize the text samples into a 2D integer tensor
     tokenizer = Tokenizer(num_words=MAX_NB_WORDS)
     tokenizer.fit_on_texts(texts)
@@ -136,6 +138,7 @@ def load_char_data(texts, labels, alphabet):
     y_val = labels[-num_validation_samples:]
     return x_train, y_train, x_val, y_val, word_index
 
+
 def loadCharEmbeddingMatrix():
     print('Indexing char vectors.')
     embeddings_index = {}
@@ -168,7 +171,7 @@ def loadCharEmbeddingMatrix():
     return embedding_layer
 
 
-def loadWordEmbeddingMatrix():
+def loadWordEmbeddingMatrix(word_index):
     print('Indexing word vectors.')
     embeddings_index = {}
     f = open(os.path.join(GLOVE_DIR, 'glove.6B.100d.txt'))
@@ -183,8 +186,8 @@ def loadWordEmbeddingMatrix():
     num_words = min(MAX_NB_WORDS, len(word_index))
     embedding_matrix = np.zeros((num_words, WORD_EMBEDDING_DIM))
     for word, i in word_index.items():
-        if i >= MAX_NB_WORDS:
-            continue
+        if i >= num_words:
+            break
         embedding_vector = embeddings_index.get(word)
         if embedding_vector is not None:
             # words not found in embedding index will be all-zeros.
@@ -196,7 +199,7 @@ def loadWordEmbeddingMatrix():
                                 WORD_EMBEDDING_DIM,
                                 weights=[embedding_matrix],
                                 input_length=MAX_SEQUENCE_LENGTH,
-                                trainable=False, name='word_embed')
+                                trainable=True, name='word_embed')
     return embedding_layer
 
 
@@ -204,12 +207,12 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser("NN for NLP")
-    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm, cnn_simple, char_cnn, cnn_simple_2, cnn_simple_3 ,char_cnn_2,char_cnn_3")
+    parser.add_argument("-network", help="NN type: cnn, lstm, cnn_lstm, cnn_simple, char_cnn, cnn_simple_2, cnn_simple_3 ,char_cnn_2,char_cnn_3,char_lstm,char_lstm_2")
     parser.add_argument("-corpus", help="training corpus: rcv1, enron")
 
     args = parser.parse_args()
 
-    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn', 'cnn_simple_2', 'cnn_simple_3', 'char_cnn_2', 'char_cnn_3']
+    possible_network = ['cnn', 'lstm', 'cnn_lstm', 'cnn_simple', 'char_cnn', 'cnn_simple_2', 'cnn_simple_3', 'char_cnn_2', 'char_cnn_3','char_lstm','char_lstm_2']
     possible_corpus  = ['rcv1', 'enron']
     if args.network not in possible_network:
         raise ValueError('not supported network type')
@@ -225,18 +228,17 @@ if __name__ == "__main__":
     if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple' or NETWORK_TYPE == 'cnn_simple_2' or NETWORK_TYPE == 'cnn_simple_3' :
         #load texts
         texts,labels = load_text(CORPUS_TYPE)
-        x_train, y_train, x_val, y_val, word_index = load_data(labels)
+        x_train, y_train, x_val, y_val, word_index = load_data(texts, labels)
 
         # first, build index mapping words in the embeddings set to their embedding vector
-        embedding_layer = loadWordEmbeddingMatrix()
+        embedding_layer = loadWordEmbeddingMatrix(word_index)
 
         sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
         embedded_sequences = embedding_layer(sequence_input)
         model = models.build_model(NETWORK_TYPE, embedded_sequences, labels_index, sequence_input)
-        print(model.summary())
 
 
-    elif NETWORK_TYPE == 'char_cnn_2' :
+    elif NETWORK_TYPE == 'char_cnn_2':
         #load texts
         texts,labels = load_text(CORPUS_TYPE)
         alphabet = (list(string.ascii_letters) + list(string.digits) +
@@ -244,11 +246,11 @@ if __name__ == "__main__":
         vocab_size = len(alphabet)
 
         x_train_c, y_train_c, x_val_c, y_val_c, word_index = load_char_data(texts, labels, alphabet)
-        x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(labels)
+        x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(texts, labels)
 
         #char embedding
         char_embedding_layer = Embedding(vocab_size,
-                                         WORD_EMBEDDING_DIM,
+                                         CHAR_EMBEDDING_DIM,
                                          input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
                                          trainable=True, name='char_embed')
         char_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input', dtype='int32')
@@ -256,11 +258,91 @@ if __name__ == "__main__":
 
 
         #word embedding
-        word_embedding_layer = loadWordEmbeddingMatrix()
+        word_embedding_layer = loadWordEmbeddingMatrix(word_index)
         word_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH,), dtype='int32')
 
         model = models.build_model(NETWORK_TYPE, word_embedding_layer(word_sequence_input), labels_index, word_sequence_input,
                                     embedded_char_sequences = char_embedding_layer(char_sequence_input), char_sequence_input = char_sequence_input)
+
+
+    elif NETWORK_TYPE == 'char_cnn':
+        #load texts
+        texts,labels = load_text()
+
+        alphabet = (list(string.ascii_letters) + list(string.digits) +
+                    list(string.punctuation) + ['\n'] + [' '])
+        vocab_size = len(alphabet)
+
+        x_train_c, y_train_c, x_val_c, y_val_c, word_index = load_char_data(texts, labels, alphabet)
+        x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(texts, labels)
+
+        #char embedding
+        #char embedding
+        char_embedding_layer = Embedding(vocab_size,
+                                         CHAR_EMBEDDING_DIM,
+                                         input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
+                                         trainable=True, name='char_embed')
+        char_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input')
+
+        model = models.build_model(NETWORK_TYPE, None, labels_index, None,
+                                    embedded_char_sequences = char_embedding_layer(char_sequence_input), char_sequence_input = char_sequence_input)
+
+    elif NETWORK_TYPE == 'char_lstm_2':
+        #load texts
+        texts,labels = load_text()
+
+        chars = sorted(list(set(texts)))
+        print('total chars:', len(chars))
+        char_indices = dict((c, i) for i, c in enumerate(chars))
+        indices_char = dict((i, c) for i, c in enumerate(chars))
+
+        maxlen = 512 #MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN
+        step = 3
+        sentences = []
+        next_chars = []
+        for i in range(0, len(texts) - maxlen, step):
+            sentences.append(texts[i: i + maxlen])
+            next_chars.append(texts[i + maxlen])
+        print('nb sequences:', len(sentences))
+
+
+        print('Vectorization...')
+        X = np.zeros((len(sentences), maxlen, len(chars)), dtype=np.bool)
+        #y = np.zeros((len(sentences), maxlen, len(labels)), dtype=np.bool)
+        y = to_categorical(np.asarray(labels))
+        for i, sentence in enumerate(sentences):
+            for t, char in enumerate(sentence):
+                X[i, t, char_indices[char]] = 1
+            #y[i, char_indices[next_chars[i]]] = 1
+
+        x_train_c = y_train_c = X
+        x_val_c = y_val_c = y
+        model = models.build_lstm_char(labels_index, maxlen, chars)
+
+
+    elif NETWORK_TYPE == 'char_lstm':
+        # load texts
+        texts, labels = load_text()
+
+        alphabet = (list(string.ascii_letters) + list(string.digits) +
+                    list(string.punctuation) + ['\n'] + [' '])
+        vocab_size = len(alphabet)
+
+        x_train_c, y_train_c, x_val_c, y_val_c, word_index = load_char_data(texts, labels, alphabet)
+
+        # char embedding
+        char_sequence_input = Input(shape=(MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,), name='input')
+
+        #char_embedding_layer = Embedding(vocab_size,
+        #                                 CHAR_EMBEDDING_DIM,
+        #                                 input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
+        #                                 trainable=True, name='char_embed')
+        d = Dense(CHAR_EMBEDDING_DIM, name='char_embed')(char_sequence_input)
+        char_embedding_layer = TimeDistributed(d)
+
+        model = models.build_model(NETWORK_TYPE, None, labels_index, None,
+                                   embedded_char_sequences=char_embedding_layer,
+                                   char_sequence_input=char_sequence_input)
 
         print(model.summary())
     print('Training model.')
@@ -270,11 +352,17 @@ if __name__ == "__main__":
         #ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0),
     ]
 
-    if NETWORK_TYPE == 'char_cnn_2' :
+    if NETWORK_TYPE == 'char_cnn_2':
         model.fit([x_train_w, x_train_c], y_train_c,
                   batch_size=128,
                   epochs=1000,
                   validation_data=([x_val_w,x_val_c], y_val_c), callbacks = _callbacks)
+
+    elif NETWORK_TYPE == 'char_cnn' or NETWORK_TYPE == 'char_lstm' or NETWORK_TYPE == 'char_lstm_2':
+        model.fit(x_train_c, y_train_c,
+                  batch_size=128,
+                  epochs=1000,
+                  validation_data=(x_val_c, y_val_c), callbacks = _callbacks)
     else:
         model.fit(x_train, y_train,
                   batch_size=128,

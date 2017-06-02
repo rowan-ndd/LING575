@@ -2,6 +2,7 @@
 from keras.layers import Dense, Flatten, Dropout, Bidirectional, Input, merge
 from keras.layers import Conv1D, MaxPooling1D, LSTM, GlobalMaxPooling1D, TimeDistributed
 from keras.models import Model
+from keras.models import Sequential
 
 # Convolution Parameters
 kernel_size = 5
@@ -9,8 +10,30 @@ filters = 64
 pool_size = 4
 
 
-filter_kernels = [5, 7,]
+filter_kernels = [7, 5, 3]
 filter_char_cnn = 128
+
+
+def build_lstm_char(labels_index, maxlen, chars):
+
+    #model = Sequential()
+
+    #model.add(LSTM(128, input_shape=(maxlen, len(chars)), dropout=0.2, recurrent_dropout=0.2))
+    #model.add(Bidirectional(LSTM(64), dropout=0.2, recurrent_dropout=0.2))
+    #model.add(Dense(256, activation='relu'))
+    #model.add(Dense(len(labels_index), activation='softmax'))
+    #model.compile(loss='categorical_crossentropy',
+    #              optimizer='adam',
+    #              metrics=['acc'])
+
+    input = Input(shape=(maxlen, len(chars),), name='input')
+    x = LSTM(128, return_sequences=False, dropout=0.2, recurrent_dropout=0.2)(input)
+    pred = Dense(len(chars), activation='softmax')(x)
+    model = Model(input, pred)
+    model.compile(loss='categorical_crossentropy',
+                  optimizer='adam',
+                  metrics=['acc'])
+    return model
 
 
 def build_model(type, word_embedded_sequences, labels_index, word_sequence_input, embedded_char_sequences = None, char_sequence_input = None):
@@ -99,7 +122,7 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
         z = MaxPooling1D(5)(z)
         z = Dropout(0.2)(z)
 
-        z = Conv1D(filters, filter_kernels[1], padding='valid', activation='relu', strides=1, name='conv_char_2')(z)
+        z = Conv1D(filters, filter_kernels[2], padding='valid', activation='relu', strides=1, name='conv_char_2')(z)
         z = MaxPooling1D(5)(z)
         z = Dropout(0.2)(z)
 
@@ -120,7 +143,9 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
 
     if type == 'lstm':
         x = Dropout(0.2)(word_embedded_sequences)
-        x = Bidirectional(LSTM(64, dropout=0.2, recurrent_dropout=0.2))(x)
+        #return_sequences=False modified
+        #may modified to multi lstm
+        x = Bidirectional(LSTM(64, return_sequences=False, dropout=0.2, recurrent_dropout=0.2))(x)
         preds = Dense(len(labels_index), activation='softmax')(x)
 
         model = Model(word_sequence_input, preds)
@@ -151,6 +176,10 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
         z = MaxPooling1D(5)(z)
         z = Dropout(0.2)(z)
 
+        z = Conv1D(filters, filter_kernels[2], padding='valid', activation='relu', strides=1, name='conv_char_3')(z)
+        z = MaxPooling1D(5)(z)
+        z = Dropout(0.2)(z)
+
         #merged = merge(z, mode='concat', concat_axis=1)
         x = GlobalMaxPooling1D()(z)
         x = Dense(256, activation='relu')(x)
@@ -162,5 +191,17 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
         model.compile(loss='categorical_crossentropy',
                         optimizer='adam',
                             metrics=['acc'])
+
+    if type == 'char_lstm':
+        x = Dropout(0.2)(embedded_char_sequences)
+        x = Bidirectional(LSTM(128, dropout=0.2, recurrent_dropout=0.2))(x)
+        x = Dense(256, activation='relu')(x)
+        x = Dropout(0.2)(x)
+        preds = Dense(len(labels_index), activation='softmax')(x)
+
+        model = Model(char_sequence_input, preds)
+        model.compile(loss='categorical_crossentropy',
+                      optimizer='adam',
+                      metrics=['acc'])
 
     return model
