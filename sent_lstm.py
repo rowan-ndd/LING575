@@ -166,6 +166,7 @@ if __name__ == "__main__":
     if NETWORK_TYPE== 'sent':
         #load texts
         texts,labels = load_text(CORPUS_TYPE)
+        Y = labels
         x_train, y_train, x_val, y_val, word_index = load_data(labels)
         embedding_matrix = loadWordEmbeddingMatrix()
         x_train = loadSentenceEmbeddings(x_train)
@@ -197,6 +198,18 @@ if __name__ == "__main__":
               batch_size=128,
               epochs=1000,
               validation_data=(x_val, y_val), callbacks = _callbacks)
+
+    predictions = model.predict(x_val)
+    prediction_classes = []
+    for pred in predictions:
+        prediction_classes.append(np.argmax(pred))
+
+    import sklearn.metrics as metrics
+    gold = Y
+    report = metrics.classification_report(gold, prediction_classes)
+    print(report)
+    cmat = metrics.confusion_matrix(gold, prediction_classes)
+    print(cmat)
 
     # serialize model to JSON
     model_json = model.to_json()
