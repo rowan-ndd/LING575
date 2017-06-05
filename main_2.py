@@ -35,7 +35,7 @@ BASE_DIR = './data'
 GLOVE_DIR = BASE_DIR + '/glove/'
 TEXT_DATA_DIR1 = BASE_DIR + '/rcv1/all/'
 TEXT_DATA_DIR2 = BASE_DIR + '/enron_data/'
-MAX_SEQUENCE_LENGTH = 50
+MAX_SEQUENCE_LENGTH = 500
 MAX_CHAR_PER_TOKEN = 10
 MAX_NB_WORDS = 20000
 CHAR_EMBEDDING_DIM = 100
@@ -204,6 +204,8 @@ if __name__ == "__main__":
     #load texts
     texts,labels = load_text_as_sentence()
     #texts, labels = fake_load_text()
+    import statistics
+    MAX_SEQUENCE_LENGTH = int(statistics.median([len(text) for text in texts]))
 
 
     import py_crepe
@@ -222,12 +224,15 @@ if __name__ == "__main__":
 
     #X = encode_data(texts,_maxlen,{k: v for v, k in enumerate(alphabet)},len(alphabet),set(alphabet))
     X =  encode_data_old(texts, MAX_SEQUENCE_LENGTH, {k: v for v, k in enumerate(alphabet)}, len(alphabet), set(alphabet))
-    Y = to_categorical(np.asarray(labels))
-    #X = fake_encode_data(texts, _maxlen, {k: v for v, k in enumerate(alphabet)}, len(alphabet), set(alphabet))
+    _Y = np.asarray(labels)
+    Y = to_categorical(_Y)
 
-    c = list(zip(X, Y))
-    random.shuffle(c)
-    X[:], Y[:] = zip(*c)
+    indices = np.arange(X.shape[0])
+    np.random.shuffle(indices)
+
+    X = X[indices]
+    Y = Y[indices]
+    _Y = _Y[indices]
 
     num_validation_samples = int(VALIDATION_SPLIT * len(X))
 
@@ -235,6 +240,7 @@ if __name__ == "__main__":
     y_train = Y[:-num_validation_samples]
     x_val = X[-num_validation_samples:]
     y_val = Y[-num_validation_samples:]
+    _Y = _Y[-num_validation_samples:]
 
     #model = py_crepe.model(filter_kernels, dense_outputs, _maxlen, len(alphabet), nb_filter, cat_output)
     model = models.build_lstm_char(cat_output, MAX_SEQUENCE_LENGTH, alphabet)
@@ -255,6 +261,25 @@ if __name__ == "__main__":
                   batch_size=128,
                   epochs=1000,
                   validation_data=(x_val, y_val), callbacks = _callbacks)
+
+    predictions = model.predict(x_val)
+    prediction_classes = []
+    for pred in predictions:
+        prediction_classes.append(np.argmax(pred))
+
+    # print confusion matix and other metric
+    predictions = model.predict(x_val)
+    prediction_classes = []
+    for pred in predictions:
+        prediction_classes.append(np.argmax(pred))
+
+    import sklearn.metrics as metrics
+    gold = _Y
+    report = metrics.classification_report(gold, prediction_classes)
+    print(report)
+    cmat = metrics.confusion_matrix(gold, prediction_classes)
+    print(cmat)
+
 
     # serialize model to JSON
     model_json = model.to_json()

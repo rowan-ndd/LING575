@@ -84,20 +84,25 @@ def load_data(labels):
                         data[i,j,k]=word_index.get(word)
     
 #     data = pad_sequences(sequences, maxlen=MAX_SEQUENCE_LENGTH)#front padding with 0s up to max_seq_len, output (num_texts, max_seq_len)
-    labels = to_categorical(np.asarray(labels))
-    print('Shape of data tensor:', data.shape)
-    print('Shape of label tensor:', labels.shape)
+    new_labels = to_categorical(np.asarray(labels))
+    print('Shape of data tensor:', new_labels.shape)
+    print('Shape of label tensor:', new_labels.shape)
     # split the data into a training set and a validation set
     indices = np.arange(data.shape[0])
     np.random.shuffle(indices)
+
     data = data[indices]
     labels = labels[indices]
+    new_labels = new_labels[indices]
     num_validation_samples = int(VALIDATION_SPLIT * data.shape[0])
+
     x_train = data[:-num_validation_samples]
-    y_train = labels[:-num_validation_samples]
+    y_train = new_labels[:-num_validation_samples]
     x_val = data[-num_validation_samples:]
-    y_val = labels[-num_validation_samples:]
-    return x_train, y_train, x_val, y_val, word_index
+    y_val = new_labels[-num_validation_samples:]
+    gold_labels = labels[-num_validation_samples:]
+
+    return x_train, y_train, x_val, y_val, word_index, gold_labels
 
 
 
@@ -166,8 +171,8 @@ if __name__ == "__main__":
     if NETWORK_TYPE== 'sent':
         #load texts
         texts,labels = load_text(CORPUS_TYPE)
-        Y = labels
-        x_train, y_train, x_val, y_val, word_index = load_data(labels)
+        labels = np.asarray(labels)
+        x_train, y_train, x_val, y_val, word_index, Y = load_data(labels)
         embedding_matrix = loadWordEmbeddingMatrix()
         x_train = loadSentenceEmbeddings(x_train)
         print(x_train)

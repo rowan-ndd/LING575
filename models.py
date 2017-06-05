@@ -25,10 +25,9 @@ def build_lstm_char(labels_index, maxlen, chars):
     #model.compile(loss='categorical_crossentropy',
     #              optimizer='adam',
     #              metrics=['acc'])
-
     input = Input(shape=(maxlen, len(chars),), name='input')
-    x = LSTM(128, return_sequences=False, dropout=0.2, recurrent_dropout=0.2)(input)
-    pred = Dense(len(chars), activation='softmax')(x)
+    x = LSTM(512, dropout=0.2, recurrent_dropout=0.2, return_sequences=False,)(input)
+    pred = Dense(labels_index, activation='softmax')(x)
     model = Model(input, pred)
     model.compile(loss='categorical_crossentropy',
                   optimizer='adam',
@@ -60,11 +59,11 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
                       metrics=['acc'])
 
     if type == 'cnn_simple':
-        x = Dropout(0.2)(word_embedded_sequences)
+        x = Dropout(0.5)(word_embedded_sequences)
         x = Conv1D(filters, kernel_size, padding='valid', activation='relu', strides=1)(x)
         x = GlobalMaxPooling1D()(x)
         x = Dense(128, activation='relu')(x)
-        x = Dropout(0.2)(x)
+        x = Dropout(0.5)(x)
         preds = Dense(len(labels_index), activation='softmax')(x)
         model = Model(word_sequence_input, preds)
         model.compile(loss='categorical_crossentropy',

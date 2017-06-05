@@ -40,7 +40,7 @@ MAX_CHAR_PER_TOKEN = 5
 MAX_NB_WORDS = 20000
 CHAR_EMBEDDING_DIM = 100
 WORD_EMBEDDING_DIM = 100
-VALIDATION_SPLIT = 0.2
+VALIDATION_SPLIT = 0.25
 
 texts = []  # list of text samples
 labels_index = {}  # dictionary mapping label name to numeric id
@@ -85,20 +85,25 @@ def load_data(texts, labels):
     word_index = tokenizer.word_index
     print('Found %s unique tokens.' % len(word_index))
     data = pad_sequences(sequences, maxlen=MAX_SEQUENCE_LENGTH)
-    labels = to_categorical(np.asarray(labels))
+    new_labels = to_categorical(np.asarray(labels))
     print('Shape of data tensor:', data.shape)
-    print('Shape of label tensor:', labels.shape)
+    print('Shape of label tensor:', new_labels.shape)
+
+
     # split the data into a training set and a validation set
     indices = np.arange(data.shape[0])
     np.random.shuffle(indices)
+
     data = data[indices]
-    labels = labels[indices]
+    new_labels = new_labels[indices]
     num_validation_samples = int(VALIDATION_SPLIT * data.shape[0])
     x_train = data[:-num_validation_samples]
-    y_train = labels[:-num_validation_samples]
+    y_train = new_labels[:-num_validation_samples]
     x_val = data[-num_validation_samples:]
-    y_val = labels[-num_validation_samples:]
-    return x_train, y_train, x_val, y_val, word_index
+    y_val = new_labels[-num_validation_samples:]
+    gold_labels = np.asarray(labels)[indices][-num_validation_samples:]
+
+    return x_train, y_train, x_val, y_val, word_index, gold_labels
 
 
 
@@ -224,11 +229,19 @@ if __name__ == "__main__":
 
     # second, prepare text samples and their labels
     print('Processing text dataset')
+    # load texts
+    texts, labels = load_text(CORPUS_TYPE)
+    print("num of authors:",len(set(labels)))
+    import statistics
+    MAX_SEQUENCE_LENGTH = statistics.median([len(text) for text in texts])
+    MAX_SEQUENCE_LENGTH = min(MAX_SEQUENCE_LENGTH,1000)
+
 
     if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple' or NETWORK_TYPE == 'cnn_simple_2' or NETWORK_TYPE == 'cnn_simple_3' :
-        #load texts
-        texts,labels = load_text(CORPUS_TYPE)
-        x_train, y_train, x_val, y_val, word_index = load_data(texts, labels)
+
+
+        x_train, y_train, x_val, y_val, word_index, Y = load_data(texts, labels)
+
 
         # first, build index mapping words in the embeddings set to their embedding vector
         embedding_layer = loadWordEmbeddingMatrix(word_index)
@@ -239,8 +252,6 @@ if __name__ == "__main__":
 
 
     elif NETWORK_TYPE == 'char_cnn_2':
-        #load texts
-        texts,labels = load_text(CORPUS_TYPE)
         alphabet = (list(string.ascii_letters) + list(string.digits) +
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
@@ -266,9 +277,6 @@ if __name__ == "__main__":
 
 
     elif NETWORK_TYPE == 'char_cnn':
-        #load texts
-        texts,labels = load_text()
-
         alphabet = (list(string.ascii_letters) + list(string.digits) +
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
@@ -288,9 +296,6 @@ if __name__ == "__main__":
                                     embedded_char_sequences = char_embedding_layer(char_sequence_input), char_sequence_input = char_sequence_input)
 
     elif NETWORK_TYPE == 'char_lstm_2':
-        #load texts
-        texts,labels = load_text()
-
         chars = sorted(list(set(texts)))
         print('total chars:', len(chars))
         char_indices = dict((c, i) for i, c in enumerate(chars))
@@ -321,9 +326,6 @@ if __name__ == "__main__":
 
 
     elif NETWORK_TYPE == 'char_lstm':
-        # load texts
-        texts, labels = load_text()
-
         alphabet = (list(string.ascii_letters) + list(string.digits) +
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
@@ -368,6 +370,26 @@ if __name__ == "__main__":
                   batch_size=128,
                   epochs=1000,
                   validation_data=(x_val, y_val), callbacks = _callbacks)
+
+    predictions = model.predict(x_val)
+    prediction_classes = []
+    for pred in predictions:
+        prediction_classes.append(np.argmax(pred))
+
+    # print confusion matix and other metric
+    predictions = model.predict(x_val)
+    prediction_classes = []
+    for pred in predictions:
+        prediction_classes.append(np.argmax(pred))
+
+    import sklearn.metrics as metrics
+    gold = Y
+    report = metrics.classification_report(gold, prediction_classes)
+    print(report)
+    cmat = metrics.confusion_matrix(gold, prediction_classes)
+    print(cmat)
+
+
 
     # serialize model to JSON
     model_json = model.to_json()
