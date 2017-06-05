@@ -179,6 +179,8 @@ def build_model(type, word_embedded_sequences, labels_index, word_sequence_input
         z = MaxPooling1D(5)(z)
         z = Dropout(0.2)(z)
 
+
+
         #merged = merge(z, mode='concat', concat_axis=1)
         x = GlobalMaxPooling1D()(z)
         x = Dense(256, activation='relu')(x)
