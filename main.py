@@ -35,10 +35,10 @@ BASE_DIR = './data'
 GLOVE_DIR = BASE_DIR + '/glove/'
 TEXT_DATA_DIR1 = BASE_DIR + '/rcv1/all/'
 TEXT_DATA_DIR2 = BASE_DIR + '/enron_data/'
-MAX_SEQUENCE_LENGTH = 1000
+MAX_SEQUENCE_LENGTH = 2000
 MAX_CHAR_PER_TOKEN = 5
 MAX_NB_WORDS = 20000
-CHAR_EMBEDDING_DIM = 100
+CHAR_EMBEDDING_DIM = 16
 WORD_EMBEDDING_DIM = 100
 VALIDATION_SPLIT = 0.25
 
@@ -127,21 +127,23 @@ def load_char_data(texts, labels, alphabet):
 
     print('Found %s unique tokens.' % len(word_index))
     data = pad_sequences(sequences, maxlen=MAX_SEQUENCE_LENGTH*MAX_CHAR_PER_TOKEN)
-    labels = to_categorical(np.asarray(labels))
+    new_labels = to_categorical(np.asarray(labels))
     print('Shape of data tensor:', data.shape)
-    print('Shape of label tensor:', labels.shape)
+    print('Shape of label tensor:', new_labels.shape)
 
     # split the data into a training set and a validation set
     indices = np.arange(data.shape[0])
     np.random.shuffle(indices)
     data = data[indices]
-    labels = labels[indices]
+    new_labels = new_labels[indices]
     num_validation_samples = int(VALIDATION_SPLIT * data.shape[0])
     x_train = data[:-num_validation_samples]
-    y_train = labels[:-num_validation_samples]
+    y_train = new_labels[:-num_validation_samples]
     x_val = data[-num_validation_samples:]
-    y_val = labels[-num_validation_samples:]
-    return x_train, y_train, x_val, y_val, word_index
+    y_val = new_labels[-num_validation_samples:]
+    gold_labels = np.asarray(labels)[indices][-num_validation_samples:]
+
+    return x_train, y_train, x_val, y_val, word_index, gold_labels
 
 
 def loadCharEmbeddingMatrix():
@@ -233,8 +235,8 @@ if __name__ == "__main__":
     texts, labels = load_text(CORPUS_TYPE)
     print("num of authors:",len(set(labels)))
     import statistics
-    MAX_SEQUENCE_LENGTH = statistics.median([len(text) for text in texts])
-    MAX_SEQUENCE_LENGTH = min(MAX_SEQUENCE_LENGTH,1000)
+    MAX_SEQUENCE_LENGTH = int(statistics.median([len(text) for text in texts]))
+    MAX_SEQUENCE_LENGTH = min(MAX_SEQUENCE_LENGTH,2000)
 
 
     if NETWORK_TYPE == 'cnn' or NETWORK_TYPE == 'lstm' or NETWORK_TYPE == 'cnn_lstm' or NETWORK_TYPE == 'cnn_simple' or NETWORK_TYPE == 'cnn_simple_2' or NETWORK_TYPE == 'cnn_simple_3' :
@@ -281,11 +283,9 @@ if __name__ == "__main__":
                     list(string.punctuation) + ['\n'] + [' '])
         vocab_size = len(alphabet)
 
-        x_train_c, y_train_c, x_val_c, y_val_c, word_index = load_char_data(texts, labels, alphabet)
-        x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(texts, labels)
+        x_train, y_train, x_val, y_val, word_index, Y = load_char_data(texts, labels, alphabet)
+        #x_train_w, y_train_w, x_val_w, y_val_w, word_index = load_data(texts, labels)
 
-        #char embedding
-        #char embedding
         char_embedding_layer = Embedding(vocab_size,
                                          CHAR_EMBEDDING_DIM,
                                          input_length=MAX_SEQUENCE_LENGTH * MAX_CHAR_PER_TOKEN,
@@ -360,11 +360,6 @@ if __name__ == "__main__":
                   epochs=1000,
                   validation_data=([x_val_w,x_val_c], y_val_c), callbacks = _callbacks)
 
-    elif NETWORK_TYPE == 'char_cnn' or NETWORK_TYPE == 'char_lstm' or NETWORK_TYPE == 'char_lstm_2':
-        model.fit(x_train_c, y_train_c,
-                  batch_size=128,
-                  epochs=1000,
-                  validation_data=(x_val_c, y_val_c), callbacks = _callbacks)
     else:
         model.fit(x_train, y_train,
                   batch_size=128,
